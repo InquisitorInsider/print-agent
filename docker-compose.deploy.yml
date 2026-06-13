@@ -1,0 +1,31 @@
+# print-agent — compose de DESPLIEGUE (descarga la imagen ya construida).
+#
+# Úsalo en OMV cuando la imagen ya está publicada en GHCR por GitHub Actions.
+# No compila nada: solo descarga y levanta. Mucho más rápido y simple.
+#
+# Imagen ya configurada con tu usuario: ghcr.io/inquisitorinsider/print-agent
+
+services:
+  print-agent:
+    image: ghcr.io/inquisitorinsider/print-agent:latest
+    container_name: print-agent
+    restart: unless-stopped
+    pull_policy: always          # al pulsar Up/Pull baja la última versión
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - print-agent-data:/data   # cola + settings.json persistentes
+    networks:
+      - pos-net
+
+networks:
+  pos-net:
+    name: pos-net
+    # Si otro contenedor (p. ej. el bot) debe llamarlo por nombre
+    # 'print-agent', marca esta red como external en ambos compose.
+
+volumes:
+  print-agent-data:
+    name: print-agent-data

@@ -1,0 +1,21 @@
+{
+  "printer": "caja",
+  "copies": 1,
+  "blocks": [
+    { "type": "text", "text": "RUTA80", "align": "center", "bold": true, "size": "double" },
+    { "type": "text", "text": "Pollería · Lima", "align": "center" },
+    { "type": "line", "char": "=" },
+    { "type": "text", "text": "Pedido #1042" },
+    { "type": "text", "text": "Cliente: María Pérez" },
+    { "type": "line" },
+    { "type": "row", "left": "2 x 1/4 Pollo a la brasa", "right": "37.80", "bold": true },
+    { "type": "text", "text": "   > con ají extra, sin papas" },
+    { "type": "row", "left": "1 x Inca Kola 1L", "right": "7.00" },
+    { "type": "line" },
+    { "type": "row", "left": "TOTAL S/", "right": "44.80", "bold": true },
+    { "type": "text", "text": "Pago: Yape" },
+    { "type": "qr", "data": "https://ruta80.pe/p/1042", "size": 6 },
+    { "type": "feed", "lines": 2 },
+    { "type": "cut" }
+  ]
+}

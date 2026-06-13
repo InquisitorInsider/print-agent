@@ -1,0 +1,36 @@
+# print-agent — servicio de impresión genérico.
+# Cualquier sistema en la red (POS, bot, ERP) le manda trabajos por HTTP.
+#
+# Despliegue: copia esta carpeta completa (Dockerfile + app/ + requirements.txt
+# + .env) al directorio de la stack y levanta el contenedor.
+
+services:
+  print-agent:
+    build: .
+    image: print-agent:latest
+    container_name: print-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      # Los sistemas llaman al agente por la IP del host en este puerto.
+      - "8000:8000"
+    volumes:
+      # Cola persistente + settings.json: sobreviven reinicios y cortes.
+      - print-agent-data:/data
+    networks:
+      - pos-net
+
+networks:
+  pos-net:
+    # Red compartida. Si otro sistema (p. ej. el bot) ya tiene su red y quieres
+    # que lo llame por nombre 'print-agent', marca esta red como external y
+    # reutilízala en ambos compose:
+    #   networks:
+    #     pos-net:
+    #       external: true
+    name: pos-net
+
+volumes:
+  print-agent-data:
+    name: print-agent-data
