@@ -1,5 +1,7 @@
 name: Construir y publicar imagen Docker
 
+# Se ejecuta solo cada vez que subes cambios a la rama principal,
+# o cuando lo lanzas a mano desde la pestaña Actions.
 on:
   push:
     branches: [ main ]
@@ -10,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      packages: write      # necesario para publicar en GHCR
 
     steps:
       - name: Descargar el código
@@ -19,6 +21,13 @@ jobs:
       - name: Calcular el nombre de la imagen (en minúsculas)
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/print-agent" >> "$GITHUB_ENV"
 
+      # QEMU + Buildx permiten construir para PC y para Raspberry Pi (ARM)
+      - name: Configurar QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Iniciar sesión en GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -26,10 +35,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Construir y publicar
+      - name: Construir y publicar (multi-arquitectura)
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: |
             ${{ env.IMAGE }}:latest
