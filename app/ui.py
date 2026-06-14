@@ -82,12 +82,42 @@ PAGE = r"""<!DOCTYPE html>
     <form id="pform" style="margin-top:14px; display:none">
       <div class="grid">
         <div><label>Nombre (para rutear, ej. caja / cocina)</label><input name="name" placeholder="caja"></div>
+        <div>
+          <label>Tipo de conexión</label>
+          <select name="conn_type">
+            <option value="raw">RAW por red (puerto 9100) — print server / impresora LAN</option>
+            <option value="lpr">LPR / LPD (puerto 515) — como en Windows</option>
+            <option value="smb">SMB — impresora compartida por Windows</option>
+          </select>
+          <p class="hint">Rellena solo la sección que corresponda a tu tipo de conexión.</p>
+        </div>
+      </div>
+
+      <h2 style="margin-top:10px">Conexión RAW (red / print server)</h2>
+      <div class="grid">
+        <div><label>IP del print server / impresora</label><input name="raw_host" placeholder="192.168.1.20"></div>
+        <div><label>Puerto</label><input name="raw_port" type="number" min="1" placeholder="9100"><p class="hint">USB1=9100, USB2=9101, USB3=9102 (D-Link)</p></div>
+      </div>
+
+      <h2 style="margin-top:10px">Conexión LPR / LPD</h2>
+      <div class="grid">
+        <div><label>IP del print server</label><input name="lpr_host" placeholder="192.168.1.20"></div>
+        <div><label>Puerto</label><input name="lpr_port" type="number" min="1" placeholder="515"></div>
+        <div><label>Nombre de cola</label><input name="lpr_queue" placeholder="el mismo que usas en Windows"><p class="hint">El nombre de cola LPR que configuras en Windows para este print server.</p></div>
+      </div>
+
+      <h2 style="margin-top:10px">Conexión SMB (Windows)</h2>
+      <div class="grid">
         <div><label>IP del PC Windows (SMB_HOST)</label><input name="smb_host" placeholder="192.168.1.50"></div>
         <div><label>Recurso compartido (SMB_SHARE)</label><input name="smb_share" placeholder="TICKETERA"></div>
         <div><label>Usuario Windows</label><input name="smb_user" placeholder="(vacío si es abierta)"></div>
         <div><label>Contraseña</label><input name="smb_pass" type="password" placeholder="(sin cambios)"></div>
         <div><label>Dominio / Grupo</label><input name="smb_domain" placeholder="WORKGROUP"></div>
         <div><label>IP explícita (opcional)</label><input name="smb_ip" placeholder="si el nombre no resuelve"></div>
+      </div>
+
+      <h2 style="margin-top:10px">Formato</h2>
+      <div class="grid">
         <div>
           <label>Modo</label>
           <select name="print_mode">
@@ -150,10 +180,15 @@ const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&l
 async function loadSettings(){
   STATE = await (await fetch('api/settings')).json();
   // tabla impresoras
-  let t = '<tr><th>Nombre</th><th>Host / Recurso</th><th>Modo</th><th></th></tr>';
+  let t = '<tr><th>Nombre</th><th>Conexión</th><th>Modo</th><th></th></tr>';
   for(const p of STATE.printers){
     const def = p.name===STATE.default_printer ? '<span class="tag">por defecto</span>' : '';
-    t += `<tr><td>${esc(p.name)}${def}</td><td class="muted">${esc(p.smb_host)} / ${esc(p.smb_share)}</td><td class="muted">${esc(p.print_mode)}</td>
+    const dest = (p.conn_type==='raw')
+      ? `RAW ${esc(p.raw_host)}:${esc(p.raw_port)}`
+      : (p.conn_type==='lpr')
+      ? `LPR ${esc(p.lpr_host)}:${esc(p.lpr_port)} (${esc(p.lpr_queue)})`
+      : `SMB ${esc(p.smb_host)}/${esc(p.smb_share)}`;
+    t += `<tr><td>${esc(p.name)}${def}</td><td class="muted">${dest}</td><td class="muted">${esc(p.print_mode)}</td>
       <td><button class="sm" onclick='editPrinter(${JSON.stringify(p.name)})'>editar</button>
           <button class="sm danger" onclick='delPrinter(${JSON.stringify(p.name)})'>borrar</button></td></tr>`;
   }
@@ -182,6 +217,7 @@ function showPrinterForm(){ document.getElementById('pform').style.display='bloc
 function hidePrinterForm(){ document.getElementById('pform').style.display='none'; }
 function newPrinter(){
   const f=document.getElementById('pform'); f.reset();
+  f.conn_type.value='raw'; f.raw_port.value=9100; f.lpr_port.value=515;
   f.print_mode.value='escpos'; f.cut_paper.checked=true; f.paper_width_chars.value=48; f.codepage.value='cp850';
   showPrinterForm(); f.name.focus();
 }

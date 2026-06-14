@@ -37,12 +37,22 @@ _data: dict = {}
 def _coerce_printer(p: dict) -> dict:
     out = {
         "name": str(p.get("name", "")).strip(),
+        # Tipo de conexión: "smb" (compartida Windows) o "raw" (socket TCP 9100,
+        # típico de print servers de red como D-Link, o impresoras con LAN).
+        "conn_type": (str(p.get("conn_type", "smb")).strip().lower() or "smb"),
+        # --- SMB ---
         "smb_host": str(p.get("smb_host", "")).strip(),
         "smb_share": str(p.get("smb_share", "")).strip(),
         "smb_user": str(p.get("smb_user", "")).strip(),
         "smb_pass": str(p.get("smb_pass", "")),
         "smb_domain": str(p.get("smb_domain", "WORKGROUP")).strip() or "WORKGROUP",
         "smb_ip": str(p.get("smb_ip", "")).strip(),
+        # --- RAW (socket TCP) ---
+        "raw_host": str(p.get("raw_host", "")).strip(),
+        # --- LPR / LPD ---
+        "lpr_host": str(p.get("lpr_host", "")).strip(),
+        "lpr_queue": str(p.get("lpr_queue", "")).strip(),
+        # --- Formato ---
         "print_mode": (str(p.get("print_mode", "escpos")).strip().lower() or "escpos"),
         "codepage": str(p.get("codepage", "cp850")).strip() or "cp850",
     }
@@ -50,6 +60,14 @@ def _coerce_printer(p: dict) -> dict:
         out["paper_width_chars"] = int(p.get("paper_width_chars", 48))
     except (TypeError, ValueError):
         out["paper_width_chars"] = 48
+    try:
+        out["raw_port"] = int(p.get("raw_port", 9100) or 9100)
+    except (TypeError, ValueError):
+        out["raw_port"] = 9100
+    try:
+        out["lpr_port"] = int(p.get("lpr_port", 515) or 515)
+    except (TypeError, ValueError):
+        out["lpr_port"] = 515
     for b in _PRINTER_BOOL:
         v = p.get(b, False)
         out[b] = v if isinstance(v, bool) else str(v).strip().lower() in (
@@ -68,7 +86,8 @@ def _coerce_client(c: dict) -> dict:
 # ----------------------------- carga / guardado -----------------------------
 def _seed() -> dict:
     printers = []
-    if config.SEED_PRINTER.get("smb_host"):
+    if (config.SEED_PRINTER.get("smb_host") or config.SEED_PRINTER.get("raw_host")
+            or config.SEED_PRINTER.get("lpr_host")):
         printers.append(_coerce_printer(config.SEED_PRINTER))
     clients = []
     if config.SEED_CLIENT_TOKEN:

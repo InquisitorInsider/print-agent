@@ -41,6 +41,12 @@ ADMIN_PASSWORD = _get("ADMIN_PASSWORD")           # si se define, la web pide us
 # crea ninguna impresora semilla.
 SEED_PRINTER = {
     "name": _get("PRINTER_NAME", "principal"),
+    "conn_type": _get("CONN_TYPE", "smb").lower(),
+    "raw_host": _get("RAW_HOST"),
+    "raw_port": _get_int("RAW_PORT", 9100),
+    "lpr_host": _get("LPR_HOST"),
+    "lpr_port": _get_int("LPR_PORT", 515),
+    "lpr_queue": _get("LPR_QUEUE"),
     "smb_host": _get("SMB_HOST"),
     "smb_share": _get("SMB_SHARE"),
     "smb_user": _get("SMB_USER"),

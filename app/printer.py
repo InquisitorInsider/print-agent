@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import base64
 import os
+import socket
 import subprocess
 import tempfile
 import textwrap
@@ -257,6 +258,82 @@ class PrinterError(RuntimeError):
 
 
 def send_to_printer(payload: bytes, printer_cfg: dict) -> None:
+    """Envía los bytes a la impresora según su tipo de conexión."""
+    conn = (printer_cfg.get("conn_type") or "smb").lower()
+    if conn == "raw":
+        _send_raw(payload, printer_cfg)
+    elif conn == "lpr":
+        _send_lpr(payload, printer_cfg)
+    else:
+        _send_smb(payload, printer_cfg)
+
+
+def _send_lpr(payload: bytes, printer_cfg: dict) -> None:
+    """LPR/LPD (RFC 1179, puerto 515). Para print servers (D-Link, etc.) que
+    se usan por cola LPR, igual que al agregarlos en Windows. El 'nombre de
+    cola' es el mismo que pones en Windows."""
+    host = printer_cfg.get("lpr_host") or printer_cfg.get("raw_host") or printer_cfg.get("smb_host")
+    port = int(printer_cfg.get("lpr_port") or 515)
+    queue = (printer_cfg.get("lpr_queue") or "lp").strip()
+    if not host:
+        raise PrinterError(
+            f"Impresora '{printer_cfg.get('name','?')}' (LPR) sin IP/host configurado"
+        )
+
+    hostname = "print-agent"
+    dfname = f"dfA001{hostname}"
+    cfname = f"cfA001{hostname}"
+    # 'l' = imprimir el archivo SIN filtrar caracteres de control (binario/ESC-POS)
+    control = (
+        f"H{hostname}\n"
+        f"Proot\n"
+        f"l{dfname}\n"
+        f"U{dfname}\n"
+        f"N{dfname}\n"
+    ).encode("ascii", "replace")
+
+    def _ack(sock, step: str) -> None:
+        resp = sock.recv(1)
+        if resp != b"\x00":
+            raise PrinterError(f"LPD rechazó '{step}' (respuesta {resp!r})")
+
+    try:
+        with socket.create_connection((host, port), timeout=15) as s:
+            s.settimeout(15)
+            # 1) Recibir trabajo para la cola
+            s.sendall(b"\x02" + queue.encode("ascii", "replace") + b"\n")
+            _ack(s, "inicio de trabajo")
+            # 2) Archivo de control
+            s.sendall(b"\x02" + str(len(control)).encode() + b" " + cfname.encode() + b"\n")
+            _ack(s, "control (cabecera)")
+            s.sendall(control + b"\x00")
+            _ack(s, "control (datos)")
+            # 3) Archivo de datos (el ticket)
+            s.sendall(b"\x03" + str(len(payload)).encode() + b" " + dfname.encode() + b"\n")
+            _ack(s, "datos (cabecera)")
+            s.sendall(payload + b"\x00")
+            _ack(s, "datos (envío)")
+    except OSError as exc:
+        raise PrinterError(f"No se pudo imprimir por LPR a {host}:{port} (cola '{queue}') — {exc}")
+
+
+def _send_raw(payload: bytes, printer_cfg: dict) -> None:
+    """RAW por socket TCP (puerto 9100). Para print servers de red (D-Link,
+    etc.) e impresoras con interfaz LAN/JetDirect."""
+    host = printer_cfg.get("raw_host") or printer_cfg.get("smb_host")
+    port = int(printer_cfg.get("raw_port") or 9100)
+    if not host:
+        raise PrinterError(
+            f"Impresora '{printer_cfg.get('name','?')}' (RAW) sin IP/host configurado"
+        )
+    try:
+        with socket.create_connection((host, port), timeout=15) as s:
+            s.sendall(payload)
+    except OSError as exc:
+        raise PrinterError(f"No se pudo conectar a {host}:{port} — {exc}")
+
+
+def _send_smb(payload: bytes, printer_cfg: dict) -> None:
     host = printer_cfg.get("smb_host")
     share = printer_cfg.get("smb_share")
     if not host or not share:
