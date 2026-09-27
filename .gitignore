@@ -1,0 +1,21 @@
+# Nunca subir secretos ni datos locales
+.env
+*.env
+!.env.example
+
+# Datos de la cola / settings en ejecución
+/data/
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Editores / SO
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

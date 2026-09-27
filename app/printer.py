@@ -35,15 +35,23 @@ El agente es genérico. Un trabajo puede venir de dos formas:
 2) Crudo (raw): el sistema manda contenido ya formateado.
        {"raw": {"text": "....."}}                 # texto plano
        {"raw": {"escpos_base64": "G1.../..="}}    # bytes ESC/POS en base64
+
+3) Imagen (solo por /print-image, más lento que 1 y 2 por el rasterizado):
+       {"image": {"base64": "iVBORw0...", "width_dots": 576,
+                  "cut": true, "feed_after": 1}}
+   Requiere una impresora en modo "escpos" (no aplica a print_mode=text).
 """
 from __future__ import annotations
 
 import base64
+import io
 import os
 import socket
 import subprocess
 import tempfile
 import textwrap
+
+from PIL import Image
 
 # --- Comandos ESC/POS ---
 ESC = b"\x1b"
@@ -241,9 +249,86 @@ def render_raw(raw: dict, printer_cfg: dict) -> bytes:
     return bytes(payload)
 
 
+# ----------------------------- render de imagen (GS v 0) -----------------------------
+def _default_image_width(printer_cfg: dict) -> int:
+    """58mm -> 384 puntos, 80mm -> 576 puntos (según el ancho en caracteres ya
+    configurado para texto: 32 = 58mm, 48 = 80mm)."""
+    chars = int(printer_cfg.get("paper_width_chars") or 48)
+    return 384 if chars <= 32 else 576
+
+
+def _raster_image(img: "Image.Image") -> bytes:
+    """Empaqueta una imagen en modo '1' (blanco/negro) de Pillow al formato
+    ESC/POS 'GS v 0' (raster bit image, modo normal): 1 bit por píxel, 8
+    píxeles por byte, MSB primero, cada fila alineada a byte."""
+    width, height = img.size
+    width_bytes = width // 8
+    pixels = img.load()
+    data = bytearray(width_bytes * height)
+    idx = 0
+    for y in range(height):
+        for xb in range(width_bytes):
+            byte = 0
+            base = xb * 8
+            for bit in range(8):
+                # Modo '1' de Pillow: valor 0 = negro, 255 = blanco.
+                if pixels[base + bit, y] == 0:
+                    byte |= 1 << (7 - bit)
+            data[idx] = byte
+            idx += 1
+    xl, xh = width_bytes & 0xFF, (width_bytes >> 8) & 0xFF
+    yl, yh = height & 0xFF, (height >> 8) & 0xFF
+    return GS + b"v0\x00" + bytes([xl, xh, yl, yh]) + bytes(data)
+
+
+def render_image(image_spec: dict, printer_cfg: dict) -> bytes:
+    if (printer_cfg.get("print_mode") or "escpos").lower() != "escpos":
+        raise PrinterError(
+            f"Impresora '{printer_cfg.get('name', '?')}' está en modo texto plano — "
+            "no puede imprimir imágenes (solo impresoras en modo ESC/POS)."
+        )
+    b64 = image_spec.get("base64") or ""
+    try:
+        raw_bytes = base64.b64decode(b64, validate=False)
+    except Exception as exc:
+        raise PrinterError(f"Imagen inválida (base64 corrupto): {exc}")
+    try:
+        img = Image.open(io.BytesIO(raw_bytes))
+        img.load()
+    except Exception as exc:
+        raise PrinterError(f"No se pudo leer la imagen: {exc}")
+
+    width_dots = int(
+        image_spec.get("width_dots")
+        or printer_cfg.get("image_width_dots")
+        or _default_image_width(printer_cfg)
+    )
+    width_dots = max(8, (width_dots // 8) * 8)  # múltiplo de 8, exigido por GS v 0
+
+    img = img.convert("L")
+    w, h = img.size
+    if w != width_dots:
+        new_h = max(1, round(h * (width_dots / w)))
+        img = img.resize((width_dots, new_h), Image.LANCZOS)
+    img = img.convert("1", dither=Image.FLOYDSTEINBERG)
+
+    out = bytearray()
+    out += INIT
+    out += ALIGN["center"]
+    out += _raster_image(img)
+    out += ALIGN["left"]
+    feed_after = image_spec.get("feed_after")
+    out += FEED * max(0, int(feed_after if feed_after is not None else 1))
+    if image_spec.get("cut", True):
+        out += CUT_PARTIAL
+    return bytes(out)
+
+
 # ----------------------------- punto de entrada -----------------------------
 def render(content: dict, printer_cfg: dict) -> bytes:
-    """content: {"blocks": [...]} o {"raw": {...}}."""
+    """content: {"blocks": [...]}, {"raw": {...}} o {"image": {...}}."""
+    if content.get("image"):
+        return render_image(content["image"], printer_cfg)
     if content.get("raw"):
         return render_raw(content["raw"], printer_cfg)
     blocks = content.get("blocks") or []

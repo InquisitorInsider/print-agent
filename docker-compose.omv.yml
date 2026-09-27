@@ -1,0 +1,50 @@
+# print-agent — compose para OMV con las variables DENTRO del archivo.
+# Pega esto en Services -> Compose -> Files -> Add (+), nómbralo print-agent.
+# No necesita un .env aparte. Rellena los valores marcados con  <<<  .
+
+services:
+  print-agent:
+    image: ghcr.io/inquisitorinsider/print-agent:latest
+    container_name: print-agent
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "8000:8000"
+    environment:
+      # --- Acceso a la interfaz web ---
+      ADMIN_USER: "admin"
+      ADMIN_PASSWORD: "CAMBIA-ESTA-CLAVE"        # <<< clave para entrar a la web
+
+      # --- Impresora inicial (también puedes añadirla luego por la web) ---
+      PRINTER_NAME: "caja"
+      SMB_HOST: "192.168.1.50"                   # <<< IP del PC Windows
+      SMB_SHARE: "TICKETERA"                     # <<< nombre del recurso compartido
+      SMB_USER: ""                               # vacío si la comparte es abierta
+      SMB_PASS: ""                               # <<< clave de Windows (si tiene)
+      SMB_DOMAIN: "WORKGROUP"
+      PRINT_MODE: "escpos"                       # escpos (recomendado) o text
+      PAPER_WIDTH_CHARS: "48"                    # 80mm = 48
+      CODEPAGE: "cp850"                          # acentos en español
+      CUT_PAPER: "true"
+      OPEN_DRAWER: "false"
+
+      # --- Token inicial para un sistema (opcional) ---
+      CLIENT_NAME: "sistema-pos"
+      PRINT_TOKEN: ""                            # <<< pega un token, o créalo por la web
+
+      # --- Reintentos / retención ---
+      RETRY_DELAY_SECONDS: "15"
+      MAX_ATTEMPTS: "0"                          # 0 = reintentar siempre
+      KEEP_DONE: "200"
+    volumes:
+      - print-agent-data:/data                   # cola + settings persistentes
+    networks:
+      - pos-net
+
+networks:
+  pos-net:
+    name: pos-net
+
+volumes:
+  print-agent-data:
+    name: print-agent-data

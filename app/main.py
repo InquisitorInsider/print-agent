@@ -5,10 +5,12 @@ El agente no sabe nada del negocio: solo recibe documentos por bloques o
 contenido crudo, los encola y los imprime en la impresora indicada.
 
 API para sistemas que imprimen:
-  POST /print     -> encolar un trabajo (blocks o raw). Header opcional:
-                     Authorization: Bearer <token-del-cliente>
-  GET  /printers  -> lista de nombres de impresoras disponibles
-  GET  /health    -> salud del servicio y de la cola
+  POST /print        -> encolar un trabajo de TEXTO (blocks o raw), rápido.
+                        Header opcional: Authorization: Bearer <token-del-cliente>
+  POST /print-image  -> encolar una IMAGEN (PNG/JPG en base64), más lento
+                        (rasterizado ESC/POS). Mismo header de auth.
+  GET  /printers     -> lista de nombres de impresoras disponibles
+  GET  /health       -> salud del servicio y de la cola
 
 Interfaz / administración (protegida con ADMIN_PASSWORD si se define):
   GET  /                  -> interfaz web de configuración
@@ -17,6 +19,7 @@ Interfaz / administración (protegida con ADMIN_PASSWORD si se define):
   GET/POST        /api/globals    -> reintentos/retención
   GET  /api/status        -> estado de la cola + trabajos
   POST /api/test          -> ticket de prueba (a una impresora)
+  POST /api/test-image    -> imagen de prueba (a una impresora)
   POST /api/retry|/api/clear -> reencolar / borrar fallidos
 """
 from __future__ import annotations
@@ -62,6 +65,17 @@ class PrintJob(BaseModel):
     model_config = {"extra": "ignore"}
 
 
+class ImagePrintJob(BaseModel):
+    printer: str | None = None
+    copies: int | None = 1
+    image_base64: str                   # PNG/JPG completo, codificado en base64
+    width_dots: int | None = None       # override; si no, usa el de la impresora
+    cut: bool | None = True
+    feed_after: int | None = 1
+    source: str | None = None
+    model_config = {"extra": "ignore"}
+
+
 def _resolve_source(authorization: str | None, explicit: str | None) -> str:
     """Autentica por token (si hay clientes) y devuelve el nombre del origen."""
     token = None
@@ -87,6 +101,23 @@ def print_endpoint(job: PrintJob, authorization: str | None = Header(default=Non
         content["raw"] = job.raw
     else:
         content["blocks"] = job.blocks
+    job_id = queue.enqueue(content, printer_name=job.printer or "",
+                           source=source, copies=job.copies or 1)
+    return {"accepted": True, "job_id": job_id, "printer": job.printer or settings.default_printer(),
+            "source": source}
+
+
+@app.post("/print-image", status_code=202)
+def print_image_endpoint(job: ImagePrintJob, authorization: str | None = Header(default=None)) -> dict:
+    source = _resolve_source(authorization, job.source)
+    if not job.image_base64:
+        raise HTTPException(status_code=400, detail="Falta 'image_base64'")
+    content = {"image": {
+        "base64": job.image_base64,
+        "width_dots": job.width_dots,
+        "cut": job.cut if job.cut is not None else True,
+        "feed_after": job.feed_after if job.feed_after is not None else 1,
+    }}
     job_id = queue.enqueue(content, printer_name=job.printer or "",
                            source=source, copies=job.copies or 1)
     return {"accepted": True, "job_id": job_id, "printer": job.printer or settings.default_printer(),
@@ -170,6 +201,17 @@ def api_test(payload: dict | None = None, _: None = Depends(require_admin)) -> d
     return {"accepted": True, "job_id": job_id}
 
 
+@app.post("/api/test-image", status_code=202)
+def api_test_image(payload: dict | None = None, _: None = Depends(require_admin)) -> dict:
+    name = (payload or {}).get("printer", "") if payload else ""
+    printer_cfg = settings.get_printer(name) or {}
+    width = int(printer_cfg.get("image_width_dots") or 0) or (
+        384 if int(printer_cfg.get("paper_width_chars") or 48) <= 32 else 576)
+    content = {"image": {"base64": _sample_image_base64(width), "cut": True, "feed_after": 1}}
+    job_id = queue.enqueue(content, printer_name=name, source="prueba")
+    return {"accepted": True, "job_id": job_id}
+
+
 @app.post("/api/retry")
 def api_retry(_: None = Depends(require_admin)) -> dict:
     return {"moved": queue.retry_failed()}
@@ -178,6 +220,28 @@ def api_retry(_: None = Depends(require_admin)) -> dict:
 @app.post("/api/clear")
 def api_clear(_: None = Depends(require_admin)) -> dict:
     return {"removed": queue.clear_failed()}
+
+
+def _sample_image_base64(width: int) -> str:
+    """Genera un PNG de prueba simple (texto + patrón) para 'Probar imagen',
+    sin depender de que el usuario tenga a mano un archivo real."""
+    import base64
+    import io
+
+    from PIL import Image, ImageDraw
+
+    height = max(80, width // 3)
+    img = Image.new("L", (width, height), 255)
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([0, 0, width - 1, height - 1], outline=0, width=3)
+    text = "PRUEBA DE IMAGEN"
+    bbox = draw.textbbox((0, 0), text)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    draw.text(((width - tw) // 2, (height - th) // 2), text, fill=0)
+    draw.line([(0, height - 1), (width, 0)], fill=0, width=2)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 def _sample_doc(printer_name: str) -> dict:

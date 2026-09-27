@@ -162,8 +162,14 @@ requests.post("http://IP_DEL_HOST:8000/print",
 Abre **`http://IP_DEL_HOST:8000`**:
 
 - **Impresoras:** añade cada impresora con su nombre (el que usarás en `printer`),
-  IP del Windows, recurso compartido, usuario/clave, modo, ancho y codepage.
-  Marca una como *por defecto*.
+  el **tipo de conexión** y los datos de formato (modo, ancho, codepage).
+  Marca una como *por defecto*. Tipos de conexión:
+    - **RAW (puerto 9100):** print servers de red (D-Link, etc.) e impresoras con
+      LAN. Solo IP y puerto (D-Link: USB1=9100, USB2=9101, USB3=9102). Lo más
+      simple y fiable para tickets ESC/POS.
+    - **LPR / LPD (puerto 515):** el mismo método con el que agregas la impresora
+      en Windows. Necesita el **nombre de cola** (el mismo que usas en Windows).
+    - **SMB:** impresora compartida desde un PC Windows (host, recurso, usuario).
 - **Clientes / tokens:** un cliente por sistema (POS, bot…). Genera su token y
   pégalo en ese sistema. Si no creas ninguno, el servicio queda **abierto en la
   red local**.

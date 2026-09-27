@@ -66,6 +66,7 @@ PAGE = r"""<!DOCTYPE html>
     <div class="bar">
       <select id="testPrinter" style="max-width:220px"></select>
       <button class="primary" onclick="testPrint()">Imprimir prueba</button>
+      <button onclick="testPrintImage()">Probar imagen</button>
       <button onclick="retryFailed()">Reintentar fallidos</button>
       <button onclick="clearFailed()">Vaciar fallidos</button>
       <button onclick="loadStatus()">Refrescar</button>
@@ -127,6 +128,7 @@ PAGE = r"""<!DOCTYPE html>
         </div>
         <div><label>Ancho (caracteres)</label><input name="paper_width_chars" type="number" min="24" max="64" placeholder="48"><p class="hint">80mm = 48</p></div>
         <div><label>Codepage</label><input name="codepage" placeholder="cp850"><p class="hint">cp850 para acentos en español</p></div>
+        <div><label>Ancho de imagen (puntos)</label><input name="image_width_dots" type="number" min="8" placeholder="auto"><p class="hint">Vacío = automático (58mm→384, 80mm→576). Solo aplica a /print-image.</p></div>
       </div>
       <div class="row-check"><input type="checkbox" name="cut_paper" id="cut_paper"><label for="cut_paper">Cortar papel (solo ESC/POS)</label></div>
       <div class="row-check"><input type="checkbox" name="open_drawer" id="open_drawer"><label for="open_drawer">Abrir cajón de dinero</label></div>
@@ -284,6 +286,9 @@ async function loadStatus(){
 async function testPrint(){ const p=document.getElementById('testPrinter').value;
   const r=await fetch('api/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({printer:p})});
   toast(r.ok?'Ticket de prueba enviado a la cola':'Error'); loadStatus(); }
+async function testPrintImage(){ const p=document.getElementById('testPrinter').value;
+  const r=await fetch('api/test-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({printer:p})});
+  toast(r.ok?'Imagen de prueba enviada a la cola':'Error'); loadStatus(); }
 async function retryFailed(){ const r=await (await fetch('api/retry',{method:'POST'})).json(); toast('Reencolados: '+r.moved); loadStatus(); }
 async function clearFailed(){ if(!confirm('¿Borrar los pedidos fallidos?'))return; const r=await (await fetch('api/clear',{method:'POST'})).json(); toast('Borrados: '+r.removed); loadStatus(); }
 

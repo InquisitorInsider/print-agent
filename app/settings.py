@@ -3,8 +3,8 @@
 Estructura:
 {
   "printers": [ {name, smb_host, smb_share, smb_user, smb_pass, smb_domain,
-                 smb_ip, print_mode, paper_width_chars, codepage,
-                 cut_paper, open_drawer}, ... ],
+                 smb_ip, print_mode, paper_width_chars, image_width_dots,
+                 codepage, cut_paper, open_drawer}, ... ],
   "default_printer": "principal",
   "clients": [ {name, token}, ... ],
   "retry_delay_seconds": 15,
@@ -60,6 +60,12 @@ def _coerce_printer(p: dict) -> dict:
         out["paper_width_chars"] = int(p.get("paper_width_chars", 48))
     except (TypeError, ValueError):
         out["paper_width_chars"] = 48
+    # Ancho en puntos para imprimir IMÁGENES (GS v 0). Vacío/0 = calculado
+    # automáticamente a partir de paper_width_chars (ver printer.py).
+    try:
+        out["image_width_dots"] = int(p.get("image_width_dots") or 0) or None
+    except (TypeError, ValueError):
+        out["image_width_dots"] = None
     try:
         out["raw_port"] = int(p.get("raw_port", 9100) or 9100)
     except (TypeError, ValueError):
