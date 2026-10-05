@@ -165,8 +165,13 @@ def render_blocks_escpos(blocks: list, printer_cfg: dict) -> bytes:
                 out += BOLD_ON
             if b.get("underline"):
                 out += UL_ON
-            out += SIZE.get(b.get("size", "normal"), SIZE["normal"])
-            for line in _wrap(b.get("text", ""), width):
+            size = b.get("size", "normal")
+            out += SIZE.get(size, SIZE["normal"])
+            # Con ancho doble caben la mitad de caracteres por línea: se parte
+            # por palabras a ese ancho, si no la impresora corta a mitad de
+            # palabra (direcciones largas en la hoja de delivery, 4 oct 2026).
+            ancho = width // 2 if size in ("double", "double_w") else width
+            for line in _wrap(b.get("text", ""), ancho):
                 out += _enc(line, codepage) + FEED
             out += SIZE["normal"]
             if b.get("underline"):
