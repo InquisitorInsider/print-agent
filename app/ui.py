@@ -115,6 +115,7 @@ PAGE = r"""<!DOCTYPE html>
         <div><label>Contraseña</label><input name="smb_pass" type="password" placeholder="(sin cambios)"></div>
         <div><label>Dominio / Grupo</label><input name="smb_domain" placeholder="WORKGROUP"></div>
         <div><label>IP explícita (opcional)</label><input name="smb_ip" placeholder="si el nombre no resuelve"></div>
+        <div><label>Protocolo SMB</label><select name="smb_protocol"><option value="">Automático (SMB2/3)</option><option value="NT1">SMB1 — Windows 7 / XP</option></select><p class="hint">Usa SMB1 si da NT_STATUS_ACCESS_DENIED al imprimir en un Windows 7.</p></div>
       </div>
 
       <h2 style="margin-top:10px">Formato</h2>

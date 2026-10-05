@@ -47,6 +47,9 @@ def _coerce_printer(p: dict) -> dict:
         "smb_pass": str(p.get("smb_pass", "")),
         "smb_domain": str(p.get("smb_domain", "WORKGROUP")).strip() or "WORKGROUP",
         "smb_ip": str(p.get("smb_ip", "")).strip(),
+        # "" = automático (SMB2/3); "NT1" = forzar SMB1 (Windows 7/XP que
+        # rechazan imprimir por SMB2 con NT_STATUS_ACCESS_DENIED).
+        "smb_protocol": ("NT1" if str(p.get("smb_protocol", "")).strip().upper() == "NT1" else ""),
         # --- RAW (socket TCP) ---
         "raw_host": str(p.get("raw_host", "")).strip(),
         # --- LPR / LPD ---

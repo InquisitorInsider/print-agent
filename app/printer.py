@@ -445,6 +445,8 @@ def _send_smb(payload: bytes, printer_cfg: dict) -> None:
             cmd += ["-W", printer_cfg["smb_domain"]]
         if printer_cfg.get("smb_ip"):
             cmd += ["-I", printer_cfg["smb_ip"]]
+        if printer_cfg.get("smb_protocol") == "NT1":
+            cmd += ["-m", "NT1", "--option=client min protocol=NT1"]
         cmd += ["-c", f'print "{tmp_path}"']
 
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
